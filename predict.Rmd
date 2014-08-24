@@ -1,0 +1,64 @@
+---
+title: "PML Assign1"
+output: html_document
+---
+
+
+
+```{r warning=FALSE}
+library(caret)
+trdata <- read.csv("pml-training.csv",header = TRUE,sep = ",", na.strings=c("#DIV/0!") )
+for(i in c(8:ncol(trdata)-1)) {trdata[,i] = as.numeric(as.character(trdata[,i]))}
+trdata <- trdata[,colSums(is.na(trdata)) == 0]
+trdata$cvtd_timestamp = as.POSIXct(strptime(trdata$cvtd_timestamp, "%d/%m/%Y %H:%M"))
+trdata <- subset(trdata, select = -c(user_name, new_window, num_window, raw_timestamp_part_1, raw_timestamp_part_2))
+```
+
+## Data Process Steps:
+na.strings used to set missings values, blank fields, div by zero in numeric columns as NA.
+Convert all non numeric columns to numeric except Classe.
+Further remove columns with NA as they inhibit creating model
+
+Feature extracted every .5 to 2.5 sec: Euler angles(roll, pitch, yaw), raw accelerometer, gyroscope and magnetometer readings.
+For Euler angles eight features were calculated: mean, variance, sd, max, min, amp, kurtosis, skewness.
+Total features: 96.
+Time could be a useful predictor of classe. So is index in case a variable is not factored.
+Username, window, timestamp are not interpretable predictor.
+
+## Repeat data processing steps for test data:
+
+```{r warning=FALSE}
+tsdata <- read.csv("pml-testing.csv",header = TRUE,sep = ",", na.strings=c("#DIV/0!") )
+for(i in c(8:ncol(tsdata)-1)) {tsdata[,i] = as.numeric(as.character(tsdata[,i]))}
+tsdata <- tsdata[,colSums(is.na(tsdata)) == 0]
+tsdata$cvtd_timestamp = as.POSIXct(strptime(tsdata$cvtd_timestamp, "%d/%m/%Y %H:%M"))
+tsdata <- subset(tsdata, select = -c(user_name, new_window, num_window, raw_timestamp_part_1, raw_timestamp_part_2))
+```
+## How you used cross validation
+
+```{r}
+inTrain <- createDataPartition(trdata$classe, p = .7, list = F)
+training <- trdata[inTrain,]
+testing <- trdata[-inTrain,]
+```
+
+## The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set.
+
+To minimise error and exploit the varacity of trees we choose boosting with trees(gbm) as the method for prediction.
+Control the computational nuances of the train function using resampling method cv.
+```{r}
+ctrl <- trainControl(allowParallel=T, method="cv", number=4)
+modFit <- train(classe ~ ., method="gbm",data=training,verbose=FALSE, trControl=ctrl)
+print(modFit)
+predcl <- predict(modFit, newdata = testing)
+
+sum(predcl == testing$classe) / length(predcl)
+```
+
+
+As evident from the the summary of fit, this is a good model.
+
+
+
+Citation:
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013. Read more: http://groupware.les.inf.puc-rio.br/har#ixzz3BKAD0M8G
